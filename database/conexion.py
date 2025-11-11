@@ -31,7 +31,6 @@ class Conexion:
             
             if self.conexion.is_connected():
                 self.cursor = self.conexion.cursor(dictionary=True)
-                print("Conexión Exitosa a MySQL")
                 return True
             
         except Error as e:
@@ -44,7 +43,6 @@ class Conexion:
             if self.cursor:
                 self.cursor.close()
             self.conexion.close()
-            print("Conexión Cerrada")
             
     def ejecutarSelect(self, query, params=None):
         """Ejecuta una consulta SELECT y devuelve los resultados"""
