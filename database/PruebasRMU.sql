@@ -25,7 +25,9 @@ join salones s
 	on  s.id_salon = g.id_salon
 join horarios_grupo h
 	on h.id_grupo = g.id_grupo
+	where grupo = 1357
     order by grupo, horario asc;
+    
         
         
 select id_profesor, upper(concat_ws(' ', p.paterno, p.materno, p.nombre)) profesor from profesores p;
