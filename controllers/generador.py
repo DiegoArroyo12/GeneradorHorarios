@@ -3,64 +3,101 @@ from models.grupo import Grupo
 from datetime import datetime, timedelta
 
 class GeneradorHorarios:
-    """Clase para generar combinaciones de hotarios sin conflictos"""
+    """Clase para generar combinaciones de horarios sin conflictos"""
     
     def __init__(self):
         self.materiasSeleccionadas = []
-        self.turno = None
+        self.turnos = []
         self.opcionesMateria = {}
         self.horariosGenerados = []
+        self.margenError = 0
         
-    def generar(self, ids_materias, turno, limite=20):
+    def generar(self, ids_materias, turnos='Ambos', limite=20, margen_error=0):
         """
-        Genera horarios válidos sin conflictos
+        Genera horarios válidos sin conflictos (o con margen de error permitido)
         
         Args:
             ids_materias (list): Lista de IDs de materias seleccionadas
-            turno (str): 'Matutino'o 'Vespertino'
+            turnos (str): 'Matutino', 'Vespertino' o 'Ambos'
             limite (int): Número máximo de opciones a devolver
+            margen_error (int): Minutos de empalme permitidos (default 0)
             
         Returns: 
             list: Lista de combinaciones válidas de grupos
         """
         
         self.materiasSeleccionadas = ids_materias
-        self.turno = turno
         self.horariosGenerados = []
+        self.margenError = margen_error
         
-        print(f"Generando horarios para {len(ids_materias)} materias...")
+        # Determinar qué turnos buscar
+        if turnos == 'Ambos':
+            self.turnos = ['Matutino', 'Vespertino']
+            print(f"\nGenerando horarios para {len(ids_materias)} materias (AMBOS TURNOS)...")
+        else:
+            self.turnos = [turnos]
+            print(f"\nGenerando horarios para {len(ids_materias)} materias (turno {turnos})...")
         
-        # Grupos disponibles por materia
+        if margen_error > 0:
+            print(f"Margen de error permitido: {margen_error} minutos")
+        
+        # Grupos disponibles por materia (considerando los turnos seleccionados)
         self.opcionesMateria = {}
         
         for id_materia in ids_materias:
-            grupos = Grupo.obtenerGruposPorMateriaTurno(id_materia, turno)
+            grupos_materia = []
             
-            if not grupos:
+            # Obtener grupos de cada turno seleccionado
+            for turno in self.turnos:
+                grupos = Grupo.obtenerGruposPorMateriaTurno(id_materia, turno)
+                grupos_materia.extend(grupos)
+            
+            if not grupos_materia:
                 print(f"No hay grupos disponibles para la materia ID {id_materia}")
                 return []
             
-            self.opcionesMateria[id_materia] = grupos
-            print(f"Materia {id_materia}: {len(grupos)} grupo(s) disponible(s)")
+            self.opcionesMateria[id_materia] = grupos_materia
+            print(f"    Materia {id_materia}: {len(grupos_materia)} grupo(s) disponible(s)")
         
         # Generar combinaciones posibles
         combinaciones = self._generarCombinaciones()
-        print(f"Total de combinaciones posibles {len(combinaciones)}")
+        print(f"\nTotal de combinaciones posibles: {len(combinaciones)}")
         
-        # Filtrar solo las válidas (sin conflictos)
+        # Filtrar solo las válidas (sin conflictos o dentro del margen)
         horariosValidos = []
+        horariosConAdvertencias = []
         
         for i, combinacion in enumerate(combinaciones, 1):
-            if not self._tieneConflictos(combinacion):
-                horariosValidos.append(combinacion)
-                
-                # Limitar el número de opciones
-                if len(horariosValidos) >= limite: break
+            tiene_conflicto, minutos_conflicto = self._tieneConflictos(combinacion)
+            
+            if not tiene_conflicto:
+                # Sin conflictos
+                horariosValidos.append({
+                    'combinacion': combinacion,
+                    'tiene_advertencia': False,
+                    'minutos_empalme': 0
+                })
+            elif minutos_conflicto <= margen_error:
+                # Con conflicto pero dentro del margen permitido
+                horariosConAdvertencias.append({
+                    'combinacion': combinacion,
+                    'tiene_advertencia': True,
+                    'minutos_empalme': minutos_conflicto
+                })
+            
+            # Limitar el número de opciones
+            if len(horariosValidos) + len(horariosConAdvertencias) >= limite:
+                break
 
-        print(f"Horarios válidos encontrados: {len(horariosValidos)}")
+        print(f"Horarios sin conflictos: {len(horariosValidos)}")
         
-        self.horariosGenerados = horariosValidos
-        return horariosValidos
+        if margen_error > 0 and horariosConAdvertencias:
+            print(f"Horarios con empalme dentro del margen: {len(horariosConAdvertencias)}")
+        
+        # Combinar ambas listas: primero los sin conflictos, luego los con advertencia
+        self.horariosGenerados = horariosValidos + horariosConAdvertencias
+        
+        return self.horariosGenerados
     
     def _generarCombinaciones(self):
         """
@@ -88,52 +125,65 @@ class GeneradorHorarios:
             combinacion (tuple): Tupla de objetos Grupo
             
         Return:
-            bool: True si hay conflictos, False si es válida
+            tuple: (bool, int) - (tiene conflicto, minutos máximos de empalme)
         """
+        
+        max_minutos_empalme = 0
         
         # Comparar cada grupo con los demás
         for i, grupo1 in enumerate(combinacion):
             for grupo2 in combinacion[i + 1:]:
-                if self._gruposEmpalman(grupo1, grupo2): return True
+                tiene_empalme, minutos = self._gruposEmpalman(grupo1, grupo2)
+                
+                if tiene_empalme:
+                    max_minutos_empalme = max(max_minutos_empalme, minutos)
 
-        return False
+        # Tiene conflicto si el empalme es mayor al margen permitido
+        tiene_conflicto = max_minutos_empalme > self.margenError
+        
+        return tiene_conflicto, max_minutos_empalme
     
     def _gruposEmpalman(self, grupo1, grupo2):
         """
-        Verifica si dos grupos tienen conflicto de horario
+        Verifica si dos grupos tienen conflicto de horario y cuántos minutos
         
         Args:
             grupo1, grupo2: Objetos Grupo a comparar
             
         Returns:
-            bool: True si se empalman, False si no
+            tuple: (bool, int) - (se empalman, minutos de empalme máximo)
         """
         
         # Obtener horarios detallados (dia por dia) de ambos grupos
         horarios1 = Grupo.obtenerHorariosDetallados(grupo1.id_grupo)
         horarios2 = Grupo.obtenerHorariosDetallados(grupo2.id_grupo)
         
+        max_minutos_empalme = 0
+        
         # Comparar cada horario de grupo 1 con cada horario de grupo 2
         for h1 in horarios1:
             for h2 in horarios2:
                 if h1['dia_semana'] == h2['dia_semana']:
-                    if self._horasEmpalmadas(
+                    se_empalman, minutos = self._horasEmpalmadas(
                         h1['hora_inicio'], h1['hora_fin'],
                         h2['hora_inicio'], h2['hora_fin']
-                    ): return True
+                    )
                     
-        return False
+                    if se_empalman:
+                        max_minutos_empalme = max(max_minutos_empalme, minutos)
+        
+        return max_minutos_empalme > 0, max_minutos_empalme
     
     def _horasEmpalmadas(self, inicio1, fin1, inicio2, fin2):
         """
-        Verifica si dos rangos de tiempo se empalman
+        Verifica si dos rangos de tiempo se empalman y calcula los minutos
         
         Args:
             inicio1, fin1: timedelta - Horario del primer grupo
             inicio2, fin2: timedelta - Horario del segundo grupo
             
         Returns:
-            bool: True si se empalman, False si no
+            tuple: (bool, int) - (se empalman, minutos de empalme)
         """
         
         # Convertir timedelta a minutos para facilitar la comparación
@@ -142,59 +192,78 @@ class GeneradorHorarios:
         inicio2_mins = inicio2.total_seconds() / 60
         fin2_mins = fin2.total_seconds() / 60
         
-        # Dos rangos se empalman si:
-        # - El inicio de uno está entre el inicio y fin del otro, O
-        # - El fin de uno está entre el inicio y fin del otro, O
-        # - Uno contiene completamente al otro
+        # Verificar si hay empalme
+        if not (inicio1_mins < fin2_mins and fin1_mins > inicio2_mins):
+            return False, 0
         
-        empalman = (
-            (inicio1_mins < fin2_mins and fin1_mins > inicio2_mins) or
-            (inicio2_mins < fin1_mins and fin2_mins > inicio1_mins)
-        )
+        # Calcular minutos de empalme
+        inicio_empalme = max(inicio1_mins, inicio2_mins)
+        fin_empalme = min(fin1_mins, fin2_mins)
+        minutos_empalme = int(fin_empalme - inicio_empalme)
         
-        return empalman
+        return True, minutos_empalme
     
-    def obtenerResumenHorario(self, combinacion):
+    def obtenerResumenHorario(self, opcion_horario):
         """
-        Genera un resumen legible de una combinación de grupos
+        Genera un resumen legible de una opción de horario
         
         Args:
-            combinacion (tuple): Tupla de objetos Grupo
+            opcion_horario (dict): Diccionario con 'combinacion', 'tiene_advertencia', 'minutos_empalme'
             
         Returns:
             str: texto formateado con el horario completo
         """
         
+        combinacion = opcion_horario['combinacion']
+        tiene_advertencia = opcion_horario['tiene_advertencia']
+        minutos_empalme = opcion_horario['minutos_empalme']
+        
         resumen = ""
         resumen += "="*60 + "\n"
-        resumen += "OPCIÓN DE HORARIO\n"
+        resumen += "OPCIÓN DE HORARIO"
+        
+        if tiene_advertencia:
+            resumen += f"(empalme de {minutos_empalme} min)\n"
+        else:
+            resumen += " ✓\n"
+        
         resumen += "="*60 + "\n\n"
         
         for grupo in combinacion:
+            # Indicador de turno
+            icono_turno = "MAÑANA" if grupo.turno == "Matutino" else "TARDE"
+            
             resumen += f"{grupo.materia['clave']} - {grupo.materia['nombre']}\n"
             resumen += f"   Profesor: {grupo.profesor}\n"
             resumen += f"   Salón: {grupo.salon}\n"
             resumen += f"   Grupo: {grupo.grupo}\n"
+            resumen += f"   {icono_turno} Turno: {grupo.turno}\n"
             
             for horario in grupo.horarios:
                 resumen += f"   {horario['dias']} | {horario['hora_inicio']} - {horario['hora_fin']}\n"
             
             resumen += "\n"
         
+        if tiene_advertencia:
+            resumen += "ADVERTENCIA: Este horario tiene clases empalmadas\n"
+            resumen += f"    empalme máximo: {minutos_empalme} minutos\n"
+        
         resumen += "="*60 + "\n"
         
         return resumen
     
-    def obtenerHorarioDia(self, combinacion):
+    def obtenerHorarioDia(self, opcion_horario):
         """
         Organiza un horario por días de la semana
         
         Args:
-            combinacion (tuple): Tupla de objetos Grupo
+            opcion_horario (dict): Diccionario con 'combinacion', 'tiene_advertencia', 'minutos_empalme'
             
         Returns:
             dict: Diccionario con días como llaves y lista de clases como valores
         """
+        combinacion = opcion_horario['combinacion']
+        
         dias_semana = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
         horario_por_dia = {dia: [] for dia in dias_semana}
         
@@ -210,6 +279,7 @@ class GeneradorHorarios:
                     'profesor': grupo.profesor,
                     'salon': grupo.salon,
                     'grupo': grupo.grupo,
+                    'turno': grupo.turno,
                     'hora_inicio': horario['hora_inicio'],
                     'hora_fin': horario['hora_fin']
                 }
@@ -222,17 +292,23 @@ class GeneradorHorarios:
         
         return horario_por_dia
     
-    def imprimirHorarioDia(self, combinacion):
+    def imprimirHorarioDia(self, opcion_horario):
         """
         Imprime un horario organizado por días (vista de tabla)
         
         Args:
-            combinacion (tuple): Tupla de objetos Grupo
+            opcion_horario (dict): Diccionario con información del horario
         """
-        horario = self.obtenerHorarioDia(combinacion)
+        horario = self.obtenerHorarioDia(opcion_horario)
+        tiene_advertencia = opcion_horario['tiene_advertencia']
+        minutos_empalme = opcion_horario['minutos_empalme']
         
         print("\n" + "="*80)
         print("HORARIO SEMANAL")
+        
+        if tiene_advertencia:
+            print(f" (empalme de {minutos_empalme} minutos)")
+        
         print("="*80 + "\n")
         
         dias_semana = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
@@ -245,8 +321,9 @@ class GeneradorHorarios:
                 print("-" * 80)
                 
                 for clase in clases:
-                    print(f"  {clase['hora_inicio']} - {clase['hora_fin']} | {clase['materia']}")
-                    print(f"    {clase['profesor']} | {clase['salon']} | Grupo {clase['grupo']}")
+                    icono_turno = "MAÑANA" if clase['turno'] == "Matutino" else "TARDE"
+                    print(f"  {clase['hora_inicio']} - {clase['hora_fin']} | {clase['materia']} {icono_turno}")
+                    print(f"   {clase['profesor']} | {clase['salon']} | Grupo {clase['grupo']}")
                     print()
             else:
                 print(f"{dia.upper()}")

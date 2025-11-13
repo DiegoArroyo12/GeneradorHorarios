@@ -106,6 +106,61 @@ class Materia:
         
         db.desconectar()
         return self.id_materia
+
+    @staticmethod
+    def obtenerOptativas():
+        """Obtiene todas las materias optativas (semestre 10)"""
+        db = Conexion()
+        db.conectar()
+        
+        query = """
+            SELECT id_materia, clave, nombre, semestre 
+            FROM materias 
+            WHERE semestre = 10
+            ORDER BY nombre
+        """
+        
+        resultados = db.ejecutarSelect(query)
+        db.desconectar()
+        
+        materias = []
+        if resultados:
+            for row in resultados:
+                mat = Materia(
+                    id_materia=row['id_materia'],
+                    clave=row['clave'],
+                    nombre=row['nombre'],
+                    semestre=row['semestre']
+                )
+                materias.append(mat)
+        
+        return materias
+    
+    @staticmethod
+    def obtenerSemestreOptativa(semestre):
+        """
+        Obtiene materias de un semestre específico.
+        Si es semestre >= 6, incluye también las optativas.
+        
+        Args:
+            semestre (int): Número de semestre (1-10)
+            
+        Returns:
+            dict: {'regulares': [...], 'optativas': [...]}
+        """
+        # Obtener materias regulares del semestre
+        materias_regulares = Materia.obtenerPorSemestre(semestre)
+        
+        resultado = {
+            'regulares': materias_regulares,
+            'optativas': []
+        }
+        
+        # Si es semestre 6 o mayor, agregar optativas
+        if semestre >= 6:
+            resultado['optativas'] = Materia.obtenerOptativas()
+        
+        return resultado
     
     def __str__(self):
         return f"{self.clave} - {self.nombre}"
