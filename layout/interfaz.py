@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from models.materia import Materia
+from models.grupo import Grupo
 from controllers.generador import GeneradorHorarios
 
 class GeneradorHorariosGUI:
@@ -18,10 +19,13 @@ class GeneradorHorariosGUI:
         # Variables
         self.materias_disponibles = []
         self.materias_optativas = []
+        self.grupos_disponibles = []
         self.materias_seleccionadas = []
+        self.grupos_seleccionados = []
         self.horarios_generados = []
         self.indice_actual = 0
         self.generador = GeneradorHorarios()
+        self.modo_seleccion = tk.StringVar(value='basico')  # 'basico' o 'avanzado'
         
         # Estilos
         self.configurarEstilos()
@@ -90,8 +94,7 @@ class GeneradorHorariosGUI:
         frame_turno = tk.Frame(frame_config)
         frame_turno.pack(fill=tk.X, pady=8)
         
-        tk.Label(frame_turno, text="Turno:", font=('Arial', 12), 
-            ).pack(side=tk.LEFT, padx=(0, 10))
+        tk.Label(frame_turno, text="Turno:", font=('Arial', 12)).pack(side=tk.LEFT, padx=(0, 10))
         
         self.var_turno = tk.StringVar(value='Ambos')
         
@@ -129,13 +132,29 @@ class GeneradorHorariosGUI:
         self.spinbox_limite.insert(0, "20")
         self.spinbox_limite.pack(side=tk.LEFT)
         
+        # Modo de selección
+        frame_modo = tk.LabelFrame(frame_config, text=" Modo de Selección ", 
+                                   font=('Arial', 11, 'bold'), padx=10, pady=10)
+        frame_modo.pack(fill=tk.X, pady=(15, 0))
+        
+        tk.Radiobutton(frame_modo, text="Básico (por materia)", 
+                      variable=self.modo_seleccion,
+                      value='basico', font=('Arial', 11),
+                      command=self.cambiarModoSeleccion).pack(anchor='w', pady=3)
+        
+        tk.Radiobutton(frame_modo, text="Avanzado (materia + profesor + grupo)", 
+                      variable=self.modo_seleccion,
+                      value='avanzado', font=('Arial', 11),
+                      command=self.cambiarModoSeleccion).pack(anchor='w', pady=3)
+        
         # COLUMNA DERECHA: Materias
         frame_materias = tk.LabelFrame(frame_superior, text=" Materias ", 
                                       font=('Arial', 13, 'bold'), padx=20, pady=15)
         frame_materias.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(10, 0))
         
         # Botón cargar materias
-        tk.Button(frame_materias, text="Cargar Materias", command=self.cargarMaterias, font=('Arial', 12, 'bold'),
+        tk.Button(frame_materias, text="Cargar Materias", command=self.cargarMaterias, 
+                 font=('Arial', 12, 'bold'),
                  padx=20, pady=8, relief=tk.FLAT, cursor='hand2').pack(fill=tk.X, pady=(0, 10))
         
         # Frame con scroll para materias
@@ -157,7 +176,7 @@ class GeneradorHorariosGUI:
                                           scrollregion=self.canvas_materias.bbox('all')))
         
         # Label de contador
-        self.label_contador = tk.Label(frame_materias, text="Materias seleccionadas: 0",
+        self.label_contador = tk.Label(frame_materias, text="Seleccionados: 0",
                                        font=('Arial', 11, 'italic'), fg='#7f8c8d')
         self.label_contador.pack(pady=(8, 0))
         
@@ -257,9 +276,23 @@ class GeneradorHorariosGUI:
         # Tags para colores alternados
         self.tree.tag_configure('oddrow', background="#2D5BA5")
         self.tree.tag_configure('evenrow', background="#2D83A5")
+    
+    def cambiarModoSeleccion(self):
+        """Cambia entre modo básico y avanzado"""
+        self.cargarMaterias()
         
     def cargarMaterias(self, event=None):
-        """Carga las materias del semestre seleccionado"""
+        """Carga las materias según el modo seleccionado"""
+        
+        modo = self.modo_seleccion.get()
+        
+        if modo == 'basico':
+            self.cargarMateriasBasico()
+        else:
+            self.cargarMateriasAvanzado()
+    
+    def cargarMateriasBasico(self):
+        """Carga las materias en modo básico (solo materias)"""
         
         # Limpiar lista anterior
         for widget in self.frame_lista_materias.winfo_children():
@@ -325,29 +358,131 @@ class GeneradorHorariosGUI:
                     font=('Arial', 11), fg='red', bg='white').pack(pady=20)
         
         self.actualizarContador()
+    
+    def cargarMateriasAvanzado(self):
+        """Carga las materias en modo avanzado (materia + profesor + grupo)"""
+        
+        # Limpiar lista anterior
+        for widget in self.frame_lista_materias.winfo_children():
+            widget.destroy()
+        
+        self.grupos_disponibles = []
+        self.grupos_seleccionados = []
+        
+        # Obtener semestre y turno
+        semestre = int(self.combo_semestre.get())
+        turno = self.var_turno.get()
+        
+        # Obtener materias
+        if semestre >= 6:
+            materias_dict = Materia.obtenerSemestreOptativa(semestre)
+            materias = materias_dict['regulares'] + materias_dict['optativas']
+        else:
+            materias = Materia.obtenerPorSemestre(semestre)
+        
+        if not materias:
+            tk.Label(self.frame_lista_materias, text="No hay materias disponibles",
+                    font=('Arial', 11), fg='red', bg='white').pack(pady=20)
+            return
+        
+        # Para cada materia, obtener sus grupos
+        for materia in materias:
+            # Obtener grupos según el turno seleccionado
+            grupos_materia = []
+            
+            if turno == 'Ambos':
+                grupos_mat = Grupo.obtenerGruposPorMateriaTurno(materia.id_materia, 'Matutino')
+                grupos_vesp = Grupo.obtenerGruposPorMateriaTurno(materia.id_materia, 'Vespertino')
+                grupos_materia = grupos_mat + grupos_vesp
+            else:
+                grupos_materia = Grupo.obtenerGruposPorMateriaTurno(materia.id_materia, turno)
+            
+            if grupos_materia:
+                # Header de la materia
+                es_optativa = materia.semestre == 10
+                bg_color = "#1a564a" if es_optativa else "#399d34"
+                texto_materia = f"[OPT] {materia.clave} - {materia.nombre}" if es_optativa else f"{materia.clave} - {materia.nombre}"
+                
+                tk.Label(self.frame_lista_materias, text=texto_materia,
+                        font=('Arial', 11, 'bold'), bg=bg_color, fg='white',
+                        pady=5).pack(fill=tk.X, pady=(5, 0))
+                
+                # Mostrar cada grupo
+                for grupo in grupos_materia:
+                    var = tk.BooleanVar()
+                    
+                    # Obtener horarios para mostrarlos
+                    horarios_texto = ""
+                    for horario in grupo.horarios:
+                        horarios_texto += f"{horario['dias']} {horario['hora_inicio']}-{horario['hora_fin']} | "
+                    horarios_texto = horarios_texto.rstrip(" | ")
+                    
+                    texto_grupo = f"   Grupo {grupo.grupo} | Prof: {grupo.profesor}\n"
+                    texto_grupo += f"   {horarios_texto}"
+                    
+                    cb = tk.Checkbutton(self.frame_lista_materias, 
+                                       text=texto_grupo,
+                                       variable=var, font=('Arial', 10),
+                                       command=self.actualizarContador,
+                                       fg='white', justify='left',
+                                       cursor='hand2')
+                    cb.pack(anchor='w', padx=25, pady=2)
+                    
+                    cb.grupo = grupo
+                    cb.var = var
+                    
+                    self.grupos_disponibles.append(grupo)
+        
+        self.actualizarContador()
         
     def actualizarContador(self):
-        """Actualiza el contador de materias seleccionadas"""
+        """Actualiza el contador de selecciones"""
         count = 0
         
         for widget in self.frame_lista_materias.winfo_children():
             if isinstance(widget, tk.Checkbutton) and widget.var.get():
                 count += 1
         
-        self.label_contador.config(text=f"Materias seleccionadas: {count}")
+        modo = self.modo_seleccion.get()
+        if modo == 'basico':
+            self.label_contador.config(text=f"Materias seleccionadas: {count}")
+        else:
+            self.label_contador.config(text=f"Grupos seleccionados: {count}")
         
     def obtenerMateriasSeleccionadas(self):
-        """Obtiene las IDs de las materias seleccionadas"""
+        """Obtiene las IDs de las materias seleccionadas (modo básico)"""
         ids = []
         
         for widget in self.frame_lista_materias.winfo_children():
             if isinstance(widget, tk.Checkbutton) and widget.var.get():
-                ids.append(widget.materia.id_materia)
+                if hasattr(widget, 'materia'):
+                    ids.append(widget.materia.id_materia)
+        
+        return ids
+    
+    def obtenerGruposSeleccionados(self):
+        """Obtiene los IDs de grupos seleccionados (modo avanzado)"""
+        ids = []
+        
+        for widget in self.frame_lista_materias.winfo_children():
+            if isinstance(widget, tk.Checkbutton) and widget.var.get():
+                if hasattr(widget, 'grupo'):
+                    ids.append(widget.grupo.id_grupo)
         
         return ids
     
     def generarHorarios(self):
-        """Genera los horarios según la configuración"""
+        """Genera los horarios según la configuración y modo"""
+        
+        modo = self.modo_seleccion.get()
+        
+        if modo == 'basico':
+            self.generarHorariosBasico()
+        else:
+            self.generarHorariosAvanzado()
+    
+    def generarHorariosBasico(self):
+        """Genera horarios en modo básico (el generador elige los grupos)"""
         
         # Validar materias seleccionadas
         ids_materias = self.obtenerMateriasSeleccionadas()
@@ -403,7 +538,7 @@ class GeneradorHorariosGUI:
                 mensaje = f"Se generaron {len(self.horarios_generados)} opciones\n\n"
                 mensaje += f"• Sin conflictos: {sin_conflictos}\n"
                 if con_conflictos > 0:
-                    mensaje += f"• Con traslape permitido: {con_conflictos}"
+                    mensaje += f"• Con empalme permitido: {con_conflictos}"
                 
                 messagebox.showinfo("Éxito", mensaje)
             else:
@@ -416,6 +551,65 @@ class GeneradorHorariosGUI:
                                       "• Aumentar el margen de error\n" +
                                       "• Seleccionar 'Ambos' turnos\n" +
                                       "• Reducir el número de materias")
+        
+        except Exception as e:
+            messagebox.showerror("Error", f"Ocurrió un error:\n{str(e)}")
+            print(f"Error detallado: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def generarHorariosAvanzado(self):
+        """Genera horario con grupos específicos seleccionados"""
+        
+        ids_grupos = self.obtenerGruposSeleccionados()
+        
+        if not ids_grupos:
+            messagebox.showwarning("Sin grupos", 
+                                  "Debes seleccionar al menos un grupo")
+            return
+        
+        # Limpiar tabla
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+        
+        self.label_info_horario.config(text="Verificando horario...",
+                                       fg='#f39c12')
+        self.root.update()
+        
+        try:
+            # Obtener los objetos Grupo completos
+            grupos_seleccionados = []
+            for widget in self.frame_lista_materias.winfo_children():
+                if isinstance(widget, tk.Checkbutton) and widget.var.get():
+                    if hasattr(widget, 'grupo'):
+                        grupos_seleccionados.append(widget.grupo)
+            
+            # Verificar conflictos
+            tiene_conflicto, minutos_conflicto = self.generador._tieneConflictos(tuple(grupos_seleccionados))
+            
+            # Crear opción de horario
+            opcion = {
+                'combinacion': tuple(grupos_seleccionados),
+                'tiene_advertencia': tiene_conflicto,
+                'minutos_empalme': minutos_conflicto
+            }
+            
+            self.horarios_generados = [opcion]
+            self.indice_actual = 0
+            self.mostrarHorarioActual()
+            self.actualizarNavegacion()
+            
+            # Habilitar botones
+            self.btn_exportar.config(state=tk.NORMAL)
+            
+            # Mensaje
+            if tiene_conflicto:
+                messagebox.showwarning("Conflicto detectado", 
+                                      f"Los grupos seleccionados tienen un empalme de {minutos_conflicto} minutos.\n\n" +
+                                      "El horario se muestra pero tiene conflictos.")
+            else:
+                messagebox.showinfo("Éxito", 
+                                   "Los grupos seleccionados no tienen conflictos.\nHorario válido.")
         
         except Exception as e:
             messagebox.showerror("Error", f"Ocurrió un error:\n{str(e)}")
@@ -436,7 +630,7 @@ class GeneradorHorariosGUI:
         minutos = opcion['minutos_empalme']
         
         if tiene_advertencia:
-            texto_info = f"Opción {self.indice_actual + 1} de {len(self.horarios_generados)} - Traslape de {minutos} min"
+            texto_info = f"Opción {self.indice_actual + 1} de {len(self.horarios_generados)} - empalme de {minutos} min"
             color_info = '#e67e22'
         else:
             texto_info = f"Opción {self.indice_actual + 1} de {len(self.horarios_generados)} - Sin conflictos"
@@ -454,10 +648,6 @@ class GeneradorHorariosGUI:
         # Organizar por materia
         for idx, grupo in enumerate(combinacion):
             # Obtener horarios detallados
-            horarios = self.generador.generador.obtenerHorariosDetallados(grupo.id_grupo) if hasattr(self.generador, 'generador') else []
-            
-            # Si no funciona el método anterior, usar el del modelo
-            from models.grupo import Grupo
             horarios = Grupo.obtenerHorariosDetallados(grupo.id_grupo)
             
             # Organizar por día
@@ -479,7 +669,7 @@ class GeneradorHorariosGUI:
                 dias_info[dia] = info_dia
             
             # Formatear materia y profesor
-            materia_texto = f"{grupo.materia['clave']}\n{grupo.materia['nombre']}"
+            materia_texto = f"{grupo.materia['clave']} - {grupo.materia['nombre']}"
             
             # Obtener correo del profesor
             from models.profesor import Profesor
