@@ -15,3 +15,4 @@ DB_PORT=3306
 ## Librerías utilizadas:
 - `pip install mysql-connector-python` - Conexión a la base de datos
 - `pip install python-dotenv` - Manejo de archivo .env (variables de entorno)
+- `pip install reportlab` - Exportación del horario en PDF

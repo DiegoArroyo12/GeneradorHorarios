@@ -1,8 +1,11 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 from models.materia import Materia
 from models.grupo import Grupo
 from controllers.generador import GeneradorHorarios
+from utils.exportar import ExportadorPDF
+from datetime import datetime
+import os
 
 class GeneradorHorariosGUI:
     """Interfaz gráfica para el generador de horarios"""
@@ -96,7 +99,7 @@ class GeneradorHorariosGUI:
         
         tk.Label(frame_turno, text="Turno:", font=('Arial', 12)).pack(side=tk.LEFT, padx=(0, 10))
         
-        self.var_turno = tk.StringVar(value='Ambos')
+        self.var_turno = tk.StringVar(value='Mixto')
         
         tk.Radiobutton(frame_turno, text="Matutino", variable=self.var_turno, 
                       value='Matutino', font=('Arial', 11),
@@ -104,8 +107,8 @@ class GeneradorHorariosGUI:
         tk.Radiobutton(frame_turno, text="Vespertino", variable=self.var_turno, 
                       value='Vespertino', font=('Arial', 11),
                       activebackground='#ecf0f1').pack(side=tk.LEFT, padx=8)
-        tk.Radiobutton(frame_turno, text="Ambos", variable=self.var_turno, 
-                      value='Ambos', font=('Arial', 11),
+        tk.Radiobutton(frame_turno, text="Mixto", variable=self.var_turno, 
+                      value='Mixto', font=('Arial', 11),
                       activebackground='#ecf0f1').pack(side=tk.LEFT, padx=8)
         
         # Margen de error
@@ -390,7 +393,7 @@ class GeneradorHorariosGUI:
             # Obtener grupos según el turno seleccionado
             grupos_materia = []
             
-            if turno == 'Ambos':
+            if turno == 'Mixto':
                 grupos_mat = Grupo.obtenerGruposPorMateriaTurno(materia.id_materia, 'Matutino')
                 grupos_vesp = Grupo.obtenerGruposPorMateriaTurno(materia.id_materia, 'Vespertino')
                 grupos_materia = grupos_mat + grupos_vesp
@@ -549,7 +552,7 @@ class GeneradorHorariosGUI:
                                       "No se pudieron generar horarios válidos.\n\n" +
                                       "Intenta:\n" +
                                       "• Aumentar el margen de error\n" +
-                                      "• Seleccionar 'Ambos' turnos\n" +
+                                      "• Seleccionar 'Mixto' turnos\n" +
                                       "• Reducir el número de materias")
         
         except Exception as e:
@@ -734,4 +737,74 @@ class GeneradorHorariosGUI:
     
     def exportarPDF(self):
         """Exporta el horario actual a PDF"""
-        messagebox.showinfo("Próximamente", "La funcionalidad de exportar a PDF aún no está disponible")
+        
+        if not self.horarios_generados:
+            messagebox.showwarning("Sin horarios", 
+                                  "No hay horarios generados para exportar")
+            return
+        
+        try:
+            # Preguntar si quiere exportar solo el actual o todos
+            respuesta = messagebox.askquestion(
+                "Exportar a PDF",
+                "¿Deseas exportar TODOS los horarios generados?\n\n" +
+                "SI = Exportar todas las opciones\n" +
+                "NO = Exportar solo el horario actual"
+            )
+            
+            exportador = ExportadorPDF()
+            
+            if respuesta == 'yes':
+                # Exportar todos los horarios
+                nombre_archivo = filedialog.asksaveasfilename(
+                    defaultextension=".pdf",
+                    filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")],
+                    initialfile=f"Propuesta de Horarios Completo ({datetime.now().strftime('%Y%m%d_%H%M%S')}).pdf"
+                )
+                
+                if nombre_archivo:
+                    semestre = int(self.combo_semestre.get())
+                    turno = self.var_turno.get()
+                    
+                    archivo_generado = exportador.exportar_multiples_horarios(
+                        self.horarios_generados,
+                        turno,
+                        semestre,
+                        nombre_archivo.replace('.pdf', '')
+                    )
+                    
+                    messagebox.showinfo("Éxito", 
+                                       f"Se exportaron {len(self.horarios_generados)} horarios exitosamente.\n\n" +
+                                       f"Archivo: {os.path.basename(archivo_generado)}")
+            else:
+                # Exportar solo el actual
+                nombre_archivo = filedialog.asksaveasfilename(
+                    defaultextension=".pdf",
+                    filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")],
+                    initialfile=f"Horario Final - Opcion {self.indice_actual + 1} ({datetime.now().strftime('%Y%m%d_%H%M%S')}).pdf"
+                )
+                
+                if nombre_archivo:
+                    opcion = self.horarios_generados[self.indice_actual]
+                    semestre = int(self.combo_semestre.get())
+                    turno = self.var_turno.get()
+                    
+                    archivo_generado = exportador.exportar_horario(
+                        opcion['combinacion'],
+                        self.indice_actual + 1,
+                        opcion['tiene_advertencia'],
+                        opcion['minutos_empalme'],
+                        turno,
+                        semestre,
+                        nombre_archivo
+                    )
+                    
+                    messagebox.showinfo("Éxito", 
+                                       f"Horario exportado exitosamente.\n\n" +
+                                       f"Archivo: {os.path.basename(archivo_generado)}")
+        
+        except Exception as e:
+            messagebox.showerror("Error", f"Error al exportar PDF:\n{str(e)}")
+            print(f"Error detallado: {e}")
+            import traceback
+            traceback.print_exc()
