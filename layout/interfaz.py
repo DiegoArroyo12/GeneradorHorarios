@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
+# Asumo que estas importaciones funcionan en tu entorno local
 from models.materia import Materia
 from models.grupo import Grupo
 from controllers.generador import GeneradorHorarios
@@ -14,9 +15,20 @@ class GeneradorHorariosGUI:
         self.root = root
         self.root.title("Generador de Horarios - ICO")
         
+        # Colores
+        self.backcolor = "#2b2b2b"
+        self.textcolor = "#ffffff"
+        self.secondcolor = "#404040"
+        
+        self.accentcolor = "#486CA5"
+        self.activecolor = "#1e3c70"
+        self.disablecolor = "#A1A1A1"
+        
+        # Configurar fondo principal
+        self.root.config(bg=self.backcolor)
+        
         # Maximizar ventana
         self.root.state('zoomed')
-        
         self.root.resizable(True, True)
         
         # Variables
@@ -28,7 +40,7 @@ class GeneradorHorariosGUI:
         self.horarios_generados = []
         self.indice_actual = 0
         self.generador = GeneradorHorarios()
-        self.modo_seleccion = tk.StringVar(value='basico')  # 'basico' o 'avanzado'
+        self.modo_seleccion = tk.StringVar(value='basico') 
         
         # Estilos
         self.configurarEstilos()
@@ -37,191 +49,219 @@ class GeneradorHorariosGUI:
         self.crearInterfaz()
         
     def configurarEstilos(self):
-        """Configura los estilos de ttk"""
         style = ttk.Style()
         style.theme_use('clam')
         
         # Estilo para Treeview (tabla)
         style.configure("Treeview",
-                       foreground="white",
-                       rowheight=60,
-                       fieldbackground="white",
-                       font=('Arial', 11))
+                        background=self.backcolor,
+                        foreground=self.textcolor,
+                        fieldbackground=self.backcolor,
+                        rowheight=60,
+                        font=('Arial', 11))
         
         style.configure("Treeview.Heading",
-                       font=('Arial', 12, 'bold'),
-                       background='#2D5BA5',
-                       foreground='white',
-                       relief='flat')
+                        font=('Arial', 12, 'bold'),
+                        background=self.accentcolor,
+                        foreground='white',
+                        relief='flat')
         
         style.map('Treeview.Heading',
-                 background=[('active', '#2D5BA5')])
+                  background=[('active', self.activecolor)])
         
-        style.configure("Treeview", rowheight=70)
-        
+        # Estilo para Scrollbars
+        style.configure("Vertical.TScrollbar", 
+                        background=self.secondcolor, 
+                        troughcolor=self.backcolor,
+                        arrowcolor="white")
+                        
     def crearInterfaz(self):
         """Crea todos los elementos de la interfaz"""
         
-        # ===== ENCABEZADO =====
-        frame_header = tk.Frame(self.root, padx=20, pady=20)
+        # Header
+        frame_header = tk.Frame(self.root, padx=20, pady=20, bg=self.backcolor)
         frame_header.pack(side=tk.TOP, fill=tk.X)
         
         tk.Label(frame_header, text="GENERADOR DE HORARIOS", 
-                font=('Arial', 28, 'bold'), fg='white').pack()
+                 font=('Arial', 28, 'bold'), fg='white', bg=self.backcolor).pack()
         
         tk.Label(frame_header, text="Ingeniería en Computación", 
-                font=('Arial', 14), fg='white').pack()
+                 font=('Arial', 14), fg=self.textcolor, bg=self.backcolor).pack()
         
-        # ===== FRAME SUPERIOR: CONFIGURACIÓN Y MATERIAS =====
-        frame_superior = tk.Frame(self.root)
+        #Configuración y Materias
+        frame_superior = tk.Frame(self.root, bg=self.backcolor)
         frame_superior.pack(side=tk.TOP, fill=tk.BOTH, padx=15, pady=15)
         
         # COLUMNA IZQUIERDA: Configuración
         frame_config = tk.LabelFrame(frame_superior, text=" Configuración ", 
-                                     font=('Arial', 13, 'bold'), padx=20, pady=15)
+                                     font=('Arial', 13, 'bold'), padx=20, pady=15,
+                                     bg=self.backcolor, fg=self.textcolor)
         frame_config.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
         
         # Semestre
-        frame_semestre = tk.Frame(frame_config)
+        frame_semestre = tk.Frame(frame_config, bg=self.backcolor)
         frame_semestre.pack(fill=tk.X, pady=8)
         
-        tk.Label(frame_semestre, text="Semestre:", font=('Arial', 12)).pack(side=tk.LEFT, padx=(0, 10))
+        tk.Label(frame_semestre, text="Semestre:", font=('Arial', 12),
+                 bg=self.backcolor, fg=self.textcolor).pack(side=tk.LEFT, padx=(0, 10))
         
         self.combo_semestre = ttk.Combobox(frame_semestre, values=list(range(1, 10)), 
-                                          state='readonly', width=12, font=('Arial', 12))
+                                           state='readonly', width=12, font=('Arial', 12))
         self.combo_semestre.pack(side=tk.LEFT)
         self.combo_semestre.current(0)
         self.combo_semestre.bind('<<ComboboxSelected>>', self.cargarMaterias)
         
         # Turno
-        frame_turno = tk.Frame(frame_config)
+        frame_turno = tk.Frame(frame_config, bg=self.backcolor)
         frame_turno.pack(fill=tk.X, pady=8)
         
-        tk.Label(frame_turno, text="Turno:", font=('Arial', 12)).pack(side=tk.LEFT, padx=(0, 10))
+        tk.Label(frame_turno, text="Turno:", font=('Arial', 12),
+                 bg=self.backcolor, fg=self.textcolor).pack(side=tk.LEFT, padx=(0, 10))
         
         self.var_turno = tk.StringVar(value='Mixto')
         
-        tk.Radiobutton(frame_turno, text="Matutino", variable=self.var_turno, 
-                      value='Matutino', font=('Arial', 11),
-                      activebackground='#ecf0f1').pack(side=tk.LEFT, padx=8)
-        tk.Radiobutton(frame_turno, text="Vespertino", variable=self.var_turno, 
-                      value='Vespertino', font=('Arial', 11),
-                      activebackground='#ecf0f1').pack(side=tk.LEFT, padx=8)
-        tk.Radiobutton(frame_turno, text="Mixto", variable=self.var_turno, 
-                      value='Mixto', font=('Arial', 11),
-                      activebackground='#ecf0f1').pack(side=tk.LEFT, padx=8)
+        
+        def crear_radio(parent, text, val):
+            tk.Radiobutton(parent, text=text, variable=self.var_turno, 
+                          value=val, font=('Arial', 11),
+                          bg=self.backcolor, fg=self.textcolor,
+                          selectcolor=self.backcolor,
+                          activebackground=self.secondcolor, activeforeground='white'
+                          ).pack(side=tk.LEFT, padx=8)
+
+        crear_radio(frame_turno, "Matutino", 'Matutino')
+        crear_radio(frame_turno, "Vespertino", 'Vespertino')
+        crear_radio(frame_turno, "Mixto", 'Mixto')
         
         # Margen de error
-        frame_margen = tk.Frame(frame_config)
+        frame_margen = tk.Frame(frame_config, bg=self.backcolor)
         frame_margen.pack(fill=tk.X, pady=8)
         
         tk.Label(frame_margen, text="Margen de error (min):", 
-                font=('Arial', 12)).pack(side=tk.LEFT, padx=(0, 10))
+                 font=('Arial', 12), bg=self.backcolor, fg=self.textcolor).pack(side=tk.LEFT, padx=(0, 10))
         
         self.spinbox_margen = tk.Spinbox(frame_margen, from_=0, to=30, width=8, 
-                                        font=('Arial', 12))
+                                         font=('Arial', 12),
+                                         bg=self.secondcolor, fg='white', buttonbackground=self.secondcolor)
         self.spinbox_margen.pack(side=tk.LEFT)
         
         # Límite de opciones
-        frame_limite = tk.Frame(frame_config)
+        frame_limite = tk.Frame(frame_config, bg=self.backcolor)
         frame_limite.pack(fill=tk.X, pady=8)
         
         tk.Label(frame_limite, text="Límite de opciones:", 
-                font=('Arial', 12)).pack(side=tk.LEFT, padx=(0, 10))
+                 font=('Arial', 12), bg=self.backcolor, fg=self.textcolor).pack(side=tk.LEFT, padx=(0, 10))
         
         self.spinbox_limite = tk.Spinbox(frame_limite, from_=5, to=50, width=8, 
-                                        font=('Arial', 12))
+                                         font=('Arial', 12),
+                                         bg=self.secondcolor, fg='white', buttonbackground=self.secondcolor)
         self.spinbox_limite.delete(0, tk.END)
         self.spinbox_limite.insert(0, "20")
         self.spinbox_limite.pack(side=tk.LEFT)
         
         # Modo de selección
         frame_modo = tk.LabelFrame(frame_config, text=" Modo de Selección ", 
-                                   font=('Arial', 11, 'bold'), padx=10, pady=10)
+                                   font=('Arial', 11, 'bold'), padx=10, pady=10,
+                                   bg=self.backcolor, fg=self.textcolor)
         frame_modo.pack(fill=tk.X, pady=(15, 0))
         
         tk.Radiobutton(frame_modo, text="Básico (por materia)", 
-                      variable=self.modo_seleccion,
-                      value='basico', font=('Arial', 11),
-                      command=self.cambiarModoSeleccion).pack(anchor='w', pady=3)
+                       variable=self.modo_seleccion,
+                       value='basico', font=('Arial', 11),
+                       command=self.cambiarModoSeleccion,
+                       bg=self.backcolor, fg=self.textcolor, selectcolor=self.backcolor,
+                       activebackground=self.secondcolor, activeforeground='white'
+                       ).pack(anchor='w', pady=3)
         
         tk.Radiobutton(frame_modo, text="Avanzado (materia + profesor + grupo)", 
-                      variable=self.modo_seleccion,
-                      value='avanzado', font=('Arial', 11),
-                      command=self.cambiarModoSeleccion).pack(anchor='w', pady=3)
+                       variable=self.modo_seleccion,
+                       value='avanzado', font=('Arial', 11),
+                       command=self.cambiarModoSeleccion,
+                       bg=self.backcolor, fg=self.textcolor, selectcolor=self.backcolor,
+                       activebackground=self.secondcolor, activeforeground='white'
+                       ).pack(anchor='w', pady=3)
         
         # COLUMNA DERECHA: Materias
         frame_materias = tk.LabelFrame(frame_superior, text=" Materias ", 
-                                      font=('Arial', 13, 'bold'), padx=20, pady=15)
+                                      font=('Arial', 13, 'bold'), padx=20, pady=15,
+                                      bg=self.backcolor, fg=self.textcolor)
         frame_materias.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(10, 0))
         
         # Botón cargar materias
         tk.Button(frame_materias, text="Cargar Materias", command=self.cargarMaterias, 
-                 font=('Arial', 12, 'bold'),
-                 padx=20, pady=8, relief=tk.FLAT, cursor='hand2').pack(fill=tk.X, pady=(0, 10))
+                  font=('Arial', 12, 'bold'),
+                  bg=self.accentcolor, fg='white',
+                  activebackground=self.activecolor, activeforeground='white',
+                  padx=20, pady=8, relief=tk.FLAT, cursor='hand2').pack(fill=tk.X, pady=(0, 10))
         
         # Frame con scroll para materias
-        frame_scroll = tk.Frame(frame_materias)
+        frame_scroll = tk.Frame(frame_materias, bg=self.backcolor)
         frame_scroll.pack(fill=tk.BOTH, expand=True)
         
-        scrollbar = tk.Scrollbar(frame_scroll)
+        scrollbar = ttk.Scrollbar(frame_scroll, orient="vertical")
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        self.canvas_materias = tk.Canvas(frame_scroll, yscrollcommand=scrollbar.set, highlightthickness=0)
+        self.canvas_materias = tk.Canvas(frame_scroll, yscrollcommand=scrollbar.set, 
+                                         highlightthickness=0, bg=self.backcolor) 
         self.canvas_materias.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.config(command=self.canvas_materias.yview)
         
-        self.frame_lista_materias = tk.Frame(self.canvas_materias)
+        self.frame_lista_materias = tk.Frame(self.canvas_materias, bg=self.backcolor)
         self.canvas_materias.create_window((0, 0), window=self.frame_lista_materias, anchor='nw')
         
         self.frame_lista_materias.bind('<Configure>', 
-                                      lambda e: self.canvas_materias.configure(
-                                          scrollregion=self.canvas_materias.bbox('all')))
+                                       lambda e: self.canvas_materias.configure(
+                                           scrollregion=self.canvas_materias.bbox('all')))
         
         # Label de contador
         self.label_contador = tk.Label(frame_materias, text="Seleccionados: 0",
-                                       font=('Arial', 11, 'italic'), fg='#7f8c8d')
+                                       font=('Arial', 11, 'italic'), fg=self.textcolor, bg=self.backcolor)
         self.label_contador.pack(pady=(8, 0))
         
         # Botón generar (más grande y destacado)
-        frame_btn_generar = tk.Frame(frame_superior)
+        frame_btn_generar = tk.Frame(frame_superior, bg=self.backcolor)
         frame_btn_generar.pack(side=tk.LEFT, fill=tk.Y, padx=(15, 0))
         
         tk.Button(frame_btn_generar, text="GENERAR\nHORARIOS",
-                 command=self.generarHorarios, font=('Arial', 14, 'bold'),
-                 padx=15, pady=15, relief=tk.FLAT, cursor='hand2').pack(expand=True)
+                  command=self.generarHorarios, font=('Arial', 14, 'bold'),
+                  bg=self.accentcolor, fg='white',
+                  activebackground=self.activecolor, activeforeground='white',
+                  padx=15, pady=15, relief=tk.FLAT, cursor='hand2').pack(expand=True)
         
         # ===== FRAME INFERIOR: TABLA DE HORARIOS =====
-        frame_inferior = tk.Frame(self.root)
+        frame_inferior = tk.Frame(self.root, bg=self.backcolor)
         frame_inferior.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True, padx=15, pady=(0, 15))
         
         # Navegación superior
-        frame_nav_superior = tk.Frame(frame_inferior, padx=15, pady=12)
+        frame_nav_superior = tk.Frame(frame_inferior, padx=15, pady=12, bg=self.backcolor)
         frame_nav_superior.pack(fill=tk.X)
         
         self.label_info_horario = tk.Label(frame_nav_superior, 
                                            text="Genera horarios para ver resultados",
-                                           font=('Arial', 13, 'bold'), fg='white')
+                                           font=('Arial', 13, 'bold'), fg='white', bg=self.backcolor)
         self.label_info_horario.pack(side=tk.LEFT)
         
         # Controles de navegación
-        frame_controles = tk.Frame(frame_nav_superior)
+        frame_controles = tk.Frame(frame_nav_superior, bg=self.backcolor)
         frame_controles.pack(side=tk.RIGHT)
         
         self.btn_anterior = tk.Button(frame_controles, text="Anterior", 
                                       command=self.horarioAnterior,
-                                      state=tk.DISABLED, font=('Arial', 11, 'bold'),
+                                      state=tk.DISABLED, font=('Arial', 11, 'bold'), 
+                                      bg=self.accentcolor, fg='white', disabledforeground=self.disablecolor,
                                       padx=20, pady=6,
                                       relief=tk.FLAT, cursor='hand2')
         self.btn_anterior.pack(side=tk.LEFT, padx=5)
         
         self.label_navegacion = tk.Label(frame_controles, text="0 / 0",
-                                         font=('Arial', 12, 'bold'), fg='white', padx=15)
+                                         font=('Arial', 12, 'bold'), fg='white', 
+                                         bg=self.backcolor, padx=15)
         self.label_navegacion.pack(side=tk.LEFT)
         
         self.btn_siguiente = tk.Button(frame_controles, text="Siguiente", 
                                        command=self.horarioSiguiente,
                                        state=tk.DISABLED, font=('Arial', 11, 'bold'),
+                                       bg=self.accentcolor, fg='white', disabledforeground=self.disablecolor,
                                        padx=20, pady=6,
                                        relief=tk.FLAT, cursor='hand2')
         self.btn_siguiente.pack(side=tk.LEFT, padx=5)
@@ -229,17 +269,19 @@ class GeneradorHorariosGUI:
         self.btn_exportar = tk.Button(frame_controles, text="Exportar PDF", 
                                       command=self.exportarPDF,
                                       state=tk.DISABLED,
-                                      font=('Arial', 11, 'bold'), padx=20, pady=6,
+                                      font=('Arial', 11, 'bold'), 
+                                      bg="#c74536", fg='white', disabledforeground=self.disablecolor,
+                                      padx=20, pady=6,
                                       relief=tk.FLAT, cursor='hand2')
         self.btn_exportar.pack(side=tk.LEFT, padx=(15, 0))
         
         # Frame para la tabla
-        frame_tabla = tk.Frame(frame_inferior, relief=tk.SOLID, borderwidth=1)
+        frame_tabla = tk.Frame(frame_inferior, relief=tk.SOLID, borderwidth=1, bg=self.backcolor)
         frame_tabla.pack(fill=tk.BOTH, expand=True, pady=(0, 0))
         
         # Crear Treeview (tabla)
         columnas = ('materia', 'grupo', 'profesor', 'lunes', 'martes', 
-                   'miercoles', 'jueves', 'viernes', 'sabado')
+                    'miercoles', 'jueves', 'viernes', 'sabado')
         
         self.tree = ttk.Treeview(frame_tabla, columns=columnas, show='headings', height=15)
         
@@ -276,9 +318,9 @@ class GeneradorHorariosGUI:
         scrollbar_y.pack(side=tk.RIGHT, fill=tk.Y)
         scrollbar_x.pack(side=tk.BOTTOM, fill=tk.X)
         
-        # Tags para colores alternados
-        self.tree.tag_configure('oddrow', background="#2D5BA5")
-        self.tree.tag_configure('evenrow', background="#2D83A5")
+        # Tags para colores alternados (Ajustados para Dark Mode)
+        self.tree.tag_configure('oddrow', background="#2b2b2b", foreground="white")
+        self.tree.tag_configure('evenrow', background="#383838", foreground="white")
     
     def cambiarModoSeleccion(self):
         """Cambia entre modo básico y avanzado"""
@@ -319,8 +361,8 @@ class GeneradorHorariosGUI:
         # Mostrar materias regulares
         if self.materias_disponibles:
             tk.Label(self.frame_lista_materias, text="MATERIAS REGULARES",
-                    font=('Arial', 11, 'bold'), bg="#399d34",
-                    pady=5).pack(fill=tk.X, pady=(0, 5))
+                     font=('Arial', 11, 'bold'), bg="#5e52b8", fg='white',
+                     pady=5).pack(fill=tk.X, pady=(0, 5))
             
             for materia in self.materias_disponibles:
                 var = tk.BooleanVar()
@@ -329,7 +371,8 @@ class GeneradorHorariosGUI:
                                    text=f"{materia.clave} - {materia.nombre}",
                                    variable=var, font=('Arial', 11),
                                    command=self.actualizarContador,
-                                   fg='white',
+                                   fg=self.textcolor, bg=self.backcolor, selectcolor=self.backcolor,
+                                   activebackground=self.backcolor, activeforeground=self.textcolor,
                                    cursor='hand2')
                 cb.pack(anchor='w', padx=15, pady=3)
                 
@@ -339,8 +382,8 @@ class GeneradorHorariosGUI:
         # Mostrar optativas
         if self.materias_optativas:
             tk.Label(self.frame_lista_materias, text="MATERIAS OPTATIVAS",
-                    font=('Arial', 11, 'bold'), bg="#1a564a",
-                    pady=5).pack(fill=tk.X, pady=(10, 5))
+                     font=('Arial', 11, 'bold'), bg="#553686", fg='white',
+                     pady=5).pack(fill=tk.X, pady=(10, 5))
             
             for materia in self.materias_optativas:
                 var = tk.BooleanVar()
@@ -349,7 +392,8 @@ class GeneradorHorariosGUI:
                                    text=f"[OPT] {materia.clave} - {materia.nombre}",
                                    variable=var, font=('Arial', 11),
                                    command=self.actualizarContador,
-                                   fg='white',
+                                   fg=self.textcolor, bg=self.backcolor, selectcolor=self.backcolor,
+                                   activebackground=self.backcolor, activeforeground=self.textcolor,
                                    cursor='hand2')
                 cb.pack(anchor='w', padx=15, pady=3)
                 
@@ -358,7 +402,7 @@ class GeneradorHorariosGUI:
         
         if not self.materias_disponibles and not self.materias_optativas:
             tk.Label(self.frame_lista_materias, text="No hay materias disponibles",
-                    font=('Arial', 11), fg='red', bg='white').pack(pady=20)
+                     font=('Arial', 11), fg='red', bg=self.backcolor).pack(pady=20)
         
         self.actualizarContador()
     
@@ -385,7 +429,7 @@ class GeneradorHorariosGUI:
         
         if not materias:
             tk.Label(self.frame_lista_materias, text="No hay materias disponibles",
-                    font=('Arial', 11), fg='red', bg='white').pack(pady=20)
+                     font=('Arial', 11), fg='red', bg=self.backcolor).pack(pady=20)
             return
         
         # Para cada materia, obtener sus grupos
@@ -403,12 +447,12 @@ class GeneradorHorariosGUI:
             if grupos_materia:
                 # Header de la materia
                 es_optativa = materia.semestre == 10
-                bg_color = "#1a564a" if es_optativa else "#399d34"
+                bg_color = "#16a085" if es_optativa else "#2ecc71"
                 texto_materia = f"[OPT] {materia.clave} - {materia.nombre}" if es_optativa else f"{materia.clave} - {materia.nombre}"
                 
                 tk.Label(self.frame_lista_materias, text=texto_materia,
-                        font=('Arial', 11, 'bold'), bg=bg_color, fg='white',
-                        pady=5).pack(fill=tk.X, pady=(5, 0))
+                         font=('Arial', 11, 'bold'), bg=bg_color, fg='white',
+                         pady=5).pack(fill=tk.X, pady=(5, 0))
                 
                 # Mostrar cada grupo
                 for grupo in grupos_materia:
@@ -427,7 +471,8 @@ class GeneradorHorariosGUI:
                                        text=texto_grupo,
                                        variable=var, font=('Arial', 10),
                                        command=self.actualizarContador,
-                                       fg='white', justify='left',
+                                       fg=self.textcolor, bg=self.backcolor, selectcolor=self.backcolor,
+                                       justify='left', activebackground=self.backcolor, activeforeground=self.textcolor,
                                        cursor='hand2')
                     cb.pack(anchor='w', padx=25, pady=2)
                     
@@ -514,7 +559,7 @@ class GeneradorHorariosGUI:
             self.tree.delete(item)
         
         self.label_info_horario.config(text="Generando horarios, espera un momento...",
-                                       fg='#f39c12')
+                                      fg='#f39c12')
         self.root.update()
         
         # Generar
@@ -576,7 +621,7 @@ class GeneradorHorariosGUI:
             self.tree.delete(item)
         
         self.label_info_horario.config(text="Verificando horario...",
-                                       fg='#f39c12')
+                                      fg='#f39c12')
         self.root.update()
         
         try:
@@ -634,7 +679,7 @@ class GeneradorHorariosGUI:
         
         if tiene_advertencia:
             texto_info = f"Opción {self.indice_actual + 1} de {len(self.horarios_generados)} - empalme de {minutos} min"
-            color_info = '#e67e22'
+            color_info = self.accentcolor
         else:
             texto_info = f"Opción {self.indice_actual + 1} de {len(self.horarios_generados)} - Sin conflictos"
             color_info = '#27ae60'
@@ -681,7 +726,7 @@ class GeneradorHorariosGUI:
             if profesor_obj and profesor_obj.correo:
                 profesor_texto += f"\n{profesor_obj.correo}"
             
-            # Insertar en la tabla
+            # Insertar en la tabla con tag para color alternado
             tag = 'evenrow' if idx % 2 == 0 else 'oddrow'
             
             self.tree.insert('', 'end', values=(
